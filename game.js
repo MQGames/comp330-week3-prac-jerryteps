@@ -4,9 +4,18 @@
 
 const vertexShaderSource = `
 attribute vec4 a_position;
+uniform vec2 u_translation;
+uniform vec2 u_offset;
+uniform float u_rotation;
+uniform float u_aspect;
 
 void main() {
-  gl_Position = a_position;
+	
+  vec4 scaledPosition = a_position * 0.1;
+  float x = scaledPosition.x * cos(u_rotation) - scaledPosition.y * sin(u_rotation) + u_translation.x - u_offset.x;
+  float y = (scaledPosition.x * sin(u_rotation) + scaledPosition.y * cos(u_rotation) + u_translation.y) * u_aspect - u_offset.y;
+  
+  gl_Position = vec4(x,y,0,1);
 }
 `;
 
@@ -76,12 +85,61 @@ function main() {
     const positionAttribute = gl.getAttribLocation(program, "a_position");
     gl.enableVertexAttribArray(positionAttribute);
     gl.vertexAttribPointer(positionAttribute, 2, gl.FLOAT, false, 0, 0);
+	
+	const rotationUniform = gl.getUniformLocation(program, "u_rotation");
+	
+	const translationUniform = gl.getUniformLocation(program, "u_translation");
+	const aspectRatioUniform = gl.getUniformLocation(program, "u_aspect");
+	const offsetUniform = gl.getUniformLocation(program, "u_offset");
 
-    const rotationUniform = gl.getUniformLocation(program, "u_rotation");
+	
+	// === Resizing ===
+	
+	let resizeCanvas = function() {
+		const resolution = window.devicePixelRatio || 1.0;
+		const displayWidth = Math.floor(canvas.clientWidth * resolution);
+		const displayHeight = Math.floor(canvas.clientHeight * resolution);
+		console.log(displayWidth, displayHeight)
+		if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+			canvas.width = canvas.clientWidth;
+			canvas.height = canvas.clientHeight;
+			return true;
+		} else {
+			return false;
+		}    
+	}
+	
+	let aspectRatio = function() {
+		return canvas.width / canvas.height;
+	}
+	
+	let offset = [0, 0];
+	
+	// === Controls ===
+	
+	document.addEventListener("keydown", function(event) {
+		if (event.key == "d") {
+			offset[0] -= 0.01;
+		}
+		if (event.key == "a") {
+			offset[0] += 0.01;
+		}
+		if (event.key == "s") {
+			offset[1] += 0.01;
+		}
+		if (event.key == "w") {
+			offset[1] -= 0.01;
+		}
+	});
 
     // === Per Frame operations ===
+	
+	let angle = 0;
 
     let update = function(deltaTime) {
+		if (!deltaTime) return;
+		const slowDown = 0.1;
+		angle += (2*Math.PI*slowDown) / deltaTime;
     };
 
     let render = function() {
@@ -89,11 +147,32 @@ function main() {
         gl.viewport(0, 0, canvas.width, canvas.height);        
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
+		
+		gl.uniform1f(rotationUniform, angle);
+		gl.uniform2fv(translationUniform,[.2, -.2]);
+		gl.uniform1f(aspectRatioUniform, aspectRatio());
+		gl.uniform2fv(offsetUniform, offset);
 
         // draw a triangle
         gl.drawArrays(gl.TRIANGLES, 0, 3);   
     };
+	
+	let timeOfLastFrame;
+	
+	let timeDiff = function(time) {
+		const deltaTime = time - timeOfLastFrame;
+		timeOfLastFrame = time;
+		return deltaTime;
+	}
 
-    render();
+    let animate = function(time) {
+		const deltaTime = timeDiff(time);
+		resizeCanvas();
+		update(deltaTime);
+		render();
+		requestAnimationFrame(animate);
+	};
+	
+	animate(0);
 }    
 
